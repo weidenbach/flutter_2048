@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 class Tile extends StatefulWidget {
   double xPos;
   double yPos;
-  double number;
+  int number;
   final double tileSize;
+  final int animationDuration = 400;
 
   final GlobalKey<TileState> globalKey;
 
@@ -28,7 +29,7 @@ class TileState extends State<Tile> with SingleTickerProviderStateMixin {
   double _newYPos = 250;
 
   late final AnimationController _controller = AnimationController(
-    duration: const Duration(milliseconds: 400),
+    duration: Duration(milliseconds: widget.animationDuration),
     vsync: this,
   );
   @override
@@ -69,6 +70,13 @@ class TileState extends State<Tile> with SingleTickerProviderStateMixin {
         );
       },
     );
+  }
+
+  void upgradeTile() {
+    setState(() {
+      widget.number *= 2;
+      //TODO play upgrade animation
+    });
   }
 
   void animateToPosition(double newXPos, double newYPos) {

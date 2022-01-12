@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'tile.dart';
+import "dart:math";
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -90,8 +91,9 @@ class BoardManager extends StatefulWidget {
   final double boardSize;
   final double padding;
   final double margin;
-  List<Tile> tiles = [];
+  final int animationDuration = 400;
 
+  List<Tile> tiles = [];
   // Contains indexes of the tiles list.
   List<int> boardState = List.filled(16, -1, growable: false);
 
@@ -106,6 +108,9 @@ class _BoardManagerState extends State<BoardManager> {
   @override
   Widget build(BuildContext context) {
     return Stack(children: [
+      Stack(
+        children: widget.tiles,
+      ),
       LayoutBuilder(
         builder: (context, constraints) {
           return GestureDetector(
@@ -119,81 +124,55 @@ class _BoardManagerState extends State<BoardManager> {
           );
         },
       ),
-      Stack(
-        children: widget.tiles,
-      )
     ]);
   }
 
   Future<void> handleSwipe(double? xMovement, double? yMovement) async {
-    //  0  1  2  3
-    //  4  5  6  7
-    //  8  9  10 11
-    //  12 13 14 15
-    if (xMovement != null) {
-      //swiping horizontally
-      if (xMovement > 0) {
-        // swiping right
-        for (int i = 0; i < 16; i += 4) {
-          bool didCombine = false;
-          for (int j = 2; j >= 0; j--) {
-            for (int k = 1; k + j < 4; k++) {
-              int curTileIndex = widget.boardState[i + j];
-              if (curTileIndex == -1) {
-                continue;
-              }
-              if (widget.boardState[i + j + k] != -1) {
-                if (widget.tiles[curTileIndex].number ==
-                        widget.tiles[widget.boardState[i + j + k]].number &&
-                    !didCombine) {
-                  //TODO:
-                  var xyPos = _calculateBoardPositionFromGridNumber(i + j + k);
-                  widget.tiles[curTileIndex].globalKey.currentState
-                      ?.animateToPosition(xyPos[0], xyPos[1]);
-                  //TODO MERGE TILES
-                  didCombine = true;
-                  k = 4;
-                } else {
-                  if (k > 1) {
-                    var xyPos =
-                        _calculateBoardPositionFromGridNumber(i + j + k - 1);
-                    widget.tiles[curTileIndex].globalKey.currentState
-                        ?.animateToPosition(xyPos[0], xyPos[1]);
-                    break;
-                  }
-                }
-              } else if (j + k == 3) {
-                var xyPos = _calculateBoardPositionFromGridNumber(i + j + k);
-                widget.tiles[curTileIndex].globalKey.currentState
-                    ?.animateToPosition(xyPos[0], xyPos[1]);
-                widget.boardState[i + j + k] = widget.boardState[curTileIndex];
-                widget.boardState[curTileIndex] = -1;
-              }
-            }
-            // If tile to right
-            //    if canMerge
-            //        merge;
-            //        lockThatTileForThisMovement;
-            //    else
-            //        lookNextTile;
-
-            // Check if tile is to the right,
-            // if yes, check if can merge
-            //         otherwise move to position before that tile.
-            // if no, check next tile
-          }
-        }
-      } else {
-        //swiping left
-      }
-    } else {
-      //swiping vertically
-    }
-
     if (!_isAnimationOngoing) {
       _isAnimationOngoing = true;
-      _createTile();
-      await Future.delayed(const Duration(milliseconds: 800), () {
+      //  0  1  2  3
+      //  4  5  6  7
+      //  8  9  10 11
+      //  12 13 14 15
+      if (xMovement != null) {
+        //swiping horizontally
+        if (xMovement > 0) {
+          // swiping right
+          for (int i = 0; i < 16; i += 4) {
+            bool didCombine = false;
+            for (int j = 2; j >= 0; j--) {
+              for (int k = 1; k + j < 4; k++) {
+                if (_isGridPositionEmpty(i + j)) {
+                  continue;
+                }
+                if (widget.boardState[i + j + k] != -1) {
+                  if (_areTileNumbersEqual(i + j, i + j + k) && !didCombine) {
+                    _mergeTiles(i + j, i + j + k);
+                    didCombine = true;
+                  } else {
+                    if (k > 1) {
+                      _moveTile(i + j, i + j + k - 1);
+                      break;
+                    }
+                  }
+                  k = 4;
+                } else if (j + k == 3) {
+                  _moveTile(i + j, i + j + k);
+                }
+              }
+            }
+          }
+        } else {
+          //swiping left
+        }
+      } else {
+        //swiping vertically
+      }
+
+      await Future.delayed(Duration(milliseconds: widget.animationDuration),
+          () {
+        //Todo only create tile if a tile moved!
+        _createTile();
         _isAnimationOngoing = false;
       });
     }
@@ -201,36 +180,67 @@ class _BoardManagerState extends State<BoardManager> {
 
   void _createTile() {
     setState(() {
-      //TODO generate random position on board.
-      print("added Tile, tilesize: ${widget.tileSize}");
       var key = GlobalKey<TileState>();
-      double number = 2;
-      if (!widget.tiles.isEmpty) {
-        number += 2;
+      int gridNumber = _getRandomEmptyTile();
+      if (gridNumber == -1) {
+        AlertDialog alert = AlertDialog(
+          title: Text("Game over"),
+          content: Text("You lost :("),
+        );
+
+        // show the dialog
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return alert;
+          },
+        );
+      } else {
+        var xyPos = _calculateBoardPositionFromGridNumber(gridNumber);
+        int tileNumber = 2 + Random().nextInt(2) * 2;
+        widget.tiles.add(Tile(
+          key: key,
+          globalKey: key,
+          xPos: xyPos[0],
+          yPos: xyPos[1],
+          number: tileNumber,
+          tileSize: widget.tileSize,
+        ));
+        widget.boardState[gridNumber] = widget.tiles.length - 1;
+
+        print("added Tile, tilesize: ${widget.tileSize}");
       }
-      widget.tiles.add(Tile(
-        key: key,
-        globalKey: key,
-        xPos: 7,
-        yPos: 7,
-        number: number,
-        tileSize: widget.tileSize,
-      ));
-      widget.boardState[0] = widget.tiles.length - 1;
-      key = GlobalKey<TileState>();
-      widget.tiles.add(Tile(
-        key: key,
-        globalKey: key,
-        xPos: 7,
-        yPos: 14 + widget.tileSize,
-        number: number,
-        tileSize: widget.tileSize,
-      ));
-      widget.boardState[4] = widget.tiles.length - 1;
-      // for (var w in widget.tiles) {
-      // w.globalKey.currentState?.animateToPosition(7, widget.tileSize + 14);
-      // }
     });
+  }
+
+  void _moveTile(int curGridNumber, int newGridNumber) {
+    var xyPos = _calculateBoardPositionFromGridNumber(newGridNumber);
+    int idx = widget.boardState[curGridNumber];
+    widget.tiles[idx].globalKey.currentState
+        ?.animateToPosition(xyPos[0], xyPos[1]);
+    widget.boardState[newGridNumber] = widget.boardState[curGridNumber];
+    widget.boardState[curGridNumber] = -1;
+  }
+
+  void _deleteTile(int tileIdx) {
+    // widget.tiles[idx].globalKey.currentState?.deleteTileDelayed();
+    widget.tiles.removeAt(tileIdx);
+
+    // Update indexes of boardState
+    for (int i = 0; i < 16; i++) {
+      if (widget.boardState[i] > tileIdx) {
+        widget.boardState[i] -= 1;
+      }
+    }
+  }
+
+  Future<void> _mergeTiles(int movingTile, int newGridNumber) async {
+    int tileToDeleteIdx = widget.boardState[newGridNumber];
+    _moveTile(movingTile, newGridNumber);
+    await Future.delayed(Duration(milliseconds: widget.animationDuration));
+    _deleteTile(tileToDeleteIdx);
+    int idx = widget.boardState[newGridNumber];
+    widget.tiles[idx].globalKey.currentState?.upgradeTile();
   }
 
   List<double> _calculateBoardPositionFromGridNumber(int gridNumber) {
@@ -241,5 +251,27 @@ class _BoardManagerState extends State<BoardManager> {
     double yPos =
         widget.padding + (widget.tileSize + widget.padding) * yTileIdx;
     return [xPos, yPos];
+  }
+
+  int _getRandomEmptyTile() {
+    List<int> list = [];
+    for (int i = 0; i < widget.boardState.length; i++) {
+      if (widget.boardState[i] == -1) {
+        list.add(i);
+      }
+    }
+    if (list.isEmpty) {
+      return -1;
+    }
+    return list[Random().nextInt(list.length)];
+  }
+
+  bool _areTileNumbersEqual(int gridNumber1, int gridNumber2) {
+    return widget.tiles[widget.boardState[gridNumber1]].number ==
+        widget.tiles[widget.boardState[gridNumber2]].number;
+  }
+
+  bool _isGridPositionEmpty(int gridNumber) {
+    return widget.boardState[gridNumber] == -1;
   }
 }
