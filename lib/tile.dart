@@ -4,8 +4,26 @@ class Tile extends StatefulWidget {
   double xPos;
   double yPos;
   int number;
+  Color? backgroundColor;
+  Color textColor = const Color(0xff776e65);
+
   final double tileSize;
-  final int animationDuration = 400;
+  final int slideAniDur = 200;
+  final int upgrAniDur = 75;
+
+  final Map<int, Color> tileBackgroundColorMap = {
+    2: Color(0xffeee4da),
+    4: Color(0xffeee1c9),
+    8: Color(0xfff2b279),
+    16: Color(0xfff69664),
+    32: Color(0xfff77c5f),
+    64: Color(0xfff7623c),
+    128: Color(0xffedd073),
+    256: Color(0xffedcc62),
+    512: Color(0xffedc950),
+    1024: Color(0xffedc53f),
+    2048: Color(0xffedc22e),
+  };
 
   final GlobalKey<TileState> globalKey;
 
@@ -16,7 +34,9 @@ class Tile extends StatefulWidget {
     required this.yPos,
     required this.number,
     required this.tileSize,
-  }) : super(key: key);
+  }) : super(key: key) {
+    backgroundColor = tileBackgroundColorMap[number];
+  }
 
   void animateToPosition(double newXPos, double newYPos) {}
 
@@ -24,14 +44,20 @@ class Tile extends StatefulWidget {
   TileState createState() => TileState();
 }
 
-class TileState extends State<Tile> with SingleTickerProviderStateMixin {
+class TileState extends State<Tile> with TickerProviderStateMixin {
   double _newXPos = 250;
   double _newYPos = 250;
 
   late final AnimationController _controller = AnimationController(
-    duration: Duration(milliseconds: widget.animationDuration),
+    duration: Duration(milliseconds: widget.slideAniDur),
     vsync: this,
   );
+
+  late final AnimationController _upgrController = AnimationController(
+    duration: Duration(milliseconds: widget.upgrAniDur),
+    vsync: this,
+  );
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -50,21 +76,27 @@ class TileState extends State<Tile> with SingleTickerProviderStateMixin {
                 parent: _controller,
                 curve: Curves.ease,
               )),
-              child: Card(
-                child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        '${widget.number}',
-                        textScaleFactor: 3,
-                        textAlign: TextAlign.center,
-                      )
-                    ]),
-                margin: EdgeInsets.all(0),
-                borderOnForeground: false,
-                shadowColor: Colors.white,
-              ),
+              child: ScaleTransition(
+                  scale: Tween(begin: 1.0, end: 1.1).animate(CurvedAnimation(
+                      parent: _upgrController, curve: Curves.easeInOut)),
+                  child: Card(
+                    child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            '${widget.number}',
+                            style: TextStyle(
+                              color: widget.textColor,
+                            ),
+                            textScaleFactor: 3,
+                            textAlign: TextAlign.center,
+                          )
+                        ]),
+                    margin: EdgeInsets.all(0),
+                    borderOnForeground: false,
+                    color: widget.backgroundColor,
+                  )),
             ),
           ],
         );
@@ -75,17 +107,26 @@ class TileState extends State<Tile> with SingleTickerProviderStateMixin {
   void upgradeTile() {
     setState(() {
       widget.number *= 2;
-      //TODO play upgrade animation
+      widget.backgroundColor = widget.tileBackgroundColorMap[widget.number];
+      if (widget.number == 8) {
+        widget.textColor = Colors.white;
+      }
+      print(widget.backgroundColor);
+      _upgrController.forward().then((value) => _upgrController.reverse());
     });
   }
 
-  void animateToPosition(double newXPos, double newYPos) {
-    print("anitmatetoPostioin");
+  Future<void> animateToPosition(double newXPos, double newYPos) async {
     setState(() {
       _newXPos = newXPos;
       _newYPos = newYPos;
-      _controller.forward();
+      _controller
+        ..reset()
+        ..forward();
     });
+    await Future.delayed(Duration(milliseconds: widget.slideAniDur));
+    widget.xPos = newXPos;
+    widget.yPos = newYPos;
   }
 
   @override
