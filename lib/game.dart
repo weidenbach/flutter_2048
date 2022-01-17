@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'tile.dart';
@@ -34,7 +35,7 @@ class Board extends StatelessWidget {
   Board({Key? key, required this.title}) : super(key: key);
   final String title;
   final double padding = 7;
-  final double margin = 14;
+  final double margin = 2 * 7;
   final double maxSize = 700;
   double boardSize = 0;
 
@@ -43,40 +44,61 @@ class Board extends StatelessWidget {
     MediaQueryData queryData;
     queryData = MediaQuery.of(context);
     boardSize = queryData.size.width > maxSize ? maxSize : queryData.size.width;
-    print(boardSize);
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-      ),
-      body: Center(
-        child: Container(
-          width: boardSize - margin,
-          height: boardSize - margin,
-          child: Stack(
-            children: <Widget>[
-              Container(
-                color: const Color(0xffbbada0),
-                child: GridView.count(
-                  padding: EdgeInsets.all(padding),
-                  shrinkWrap: true,
-                  primary: false,
-                  crossAxisSpacing: padding,
-                  mainAxisSpacing: padding,
-                  crossAxisCount: 4,
-                  children: <Widget>[
-                    for (var i = 0; i < tCnt; i++)
-                      Container(
-                        color: const Color(0xffcdc1b4),
+      body: Stack(children: [
+        LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            return Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: EdgeInsets.only(
+                    bottom: ((constraints.maxHeight + boardSize - margin) / 2)),
+                child: Container(
+                  height: constraints.maxHeight / 2,
+                  width: boardSize - margin,
+                  child: Align(
+                    child: Container(
+                      margin: EdgeInsets.only(bottom: margin),
+                      child: const Text(
+                        "2048",
+                        textScaleFactor: 4,
+                        style: TextStyle(
+                          color: Color(0xff776e65),
+                        ),
                       ),
-                  ],
+                    ),
+                    alignment: Alignment.bottomLeft,
+                  ),
                 ),
               ),
-              BoardManager(
-                  boardSize: boardSize, padding: padding, margin: margin)
-            ],
+            );
+          },
+        ),
+        Center(
+          child: Container(
+            width: boardSize - margin,
+            height: boardSize - margin,
+            child: Container(
+              color: const Color(0xffbbada0),
+              child: GridView.count(
+                padding: EdgeInsets.all(padding),
+                shrinkWrap: true,
+                primary: false,
+                crossAxisSpacing: padding,
+                mainAxisSpacing: padding,
+                crossAxisCount: rows,
+                children: <Widget>[
+                  for (var i = 0; i < tCnt; i++)
+                    Container(
+                      color: const Color(0xffcdc1b4),
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
-      ),
+        BoardManager(boardSize: boardSize, padding: padding, margin: margin)
+      ]),
     );
   }
 }
@@ -94,10 +116,11 @@ class BoardManager extends StatefulWidget {
   final double boardSize;
   final double padding;
   final double margin;
-  final int slideAniDur = 200;
+  final int slideAniDur = 125;
+  bool didStart = false;
 
   List<Tile> tiles = [];
-  // Contains indexes of the tiles list.
+  // Contains keys of the tiles inside the tiles list.
   List<GlobalKey<TileState>?> boardState =
       List.filled(tCnt, null, growable: false);
 
@@ -108,83 +131,114 @@ class BoardManager extends StatefulWidget {
 class _BoardManagerState extends State<BoardManager> {
   final double _swipeSensitivity = 5;
   bool _isAnimationOngoing = false;
-  bool _didStart = false;
 
   @override
   Widget build(BuildContext context) {
-    if (!_didStart) {
+    // The game starts with two tiles.
+    if (!widget.didStart) {
+      widget.didStart = true;
       _createTile();
       _createTile();
-      _didStart = true;
     }
-    return Stack(children: [
-      Stack(
-        children: widget.tiles,
-      ),
-      LayoutBuilder(
-        builder: (context, constraints) {
-          return GestureDetector(
-            onPanUpdate: (details) {
-              if (details.delta.dx.abs() > _swipeSensitivity) {
-                handleSwipe(details.delta.dx, null);
-              } else if (details.delta.dy.abs() > _swipeSensitivity) {
-                handleSwipe(null, details.delta.dy);
-              }
-            },
-          );
-        },
-      ),
-    ]);
+    return Stack(
+      children: [
+        Center(
+          child: Container(
+            width: widget.boardSize - widget.margin,
+            height: widget.boardSize - widget.margin,
+            child: Stack(
+              children: widget.tiles,
+            ),
+          ),
+        ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            return GestureDetector(
+              onPanUpdate: (details) {
+                if (details.delta.dx.abs() > _swipeSensitivity) {
+                  _handleSwipe(details.delta.dx, null);
+                } else if (details.delta.dy.abs() > _swipeSensitivity) {
+                  _handleSwipe(null, details.delta.dy);
+                }
+              },
+            );
+          },
+        ),
+      ],
+    );
   }
 
-  Future<void> handleSwipe(double? xMovement, double? yMovement) async {
+  Future<void> _handleSwipe(double? xMovement, double? yMovement) async {
     if (!_isAnimationOngoing) {
       _isAnimationOngoing = true;
-      List<bool> moves = [];
-      if (xMovement != null) {
-        //Swiping horizontally
-        if (xMovement > 0) {
-          // swiping right
-          for (int i = 0; i < tCnt; i += rows) {
-            moves.add(_moveRowOrColumn(i, i + 3, 1));
-          }
-        } else {
-          //swiping left
-          for (int i = 0; i < tCnt; i += rows) {
-            moves.add(_moveRowOrColumn(i + 3, i, -1));
-          }
-        }
-      }
-      if (yMovement != null) {
-        if (yMovement > 0) {
-          // swiping up
-          for (int i = 0; i < rows; i += 1) {
-            moves.add(_moveRowOrColumn(i, i + 3 * rows, 4));
-          }
-        } else {
-          //swiping down
-          for (int i = 0; i < rows; i += 1) {
-            moves.add(_moveRowOrColumn(i + 3 * rows, i, -4));
-          }
-        }
-      }
-
-      await Future.delayed(Duration(milliseconds: widget.slideAniDur), () {
-        if (moves.contains(true)) {
-          // Only create tile if a tile moved
+      bool didMove = _moveTilesBasedOnSwipe(xMovement, yMovement);
+      // Only create tile if a tile moved
+      if (didMove) {
+        await Future.delayed(Duration(milliseconds: widget.slideAniDur), () {
           _createTile();
-        }
-        _isAnimationOngoing = false;
-      });
+        });
+      }
+      _isAnimationOngoing = false;
     }
   }
 
-  //  Grid 4 * 4:
-  //  0  1  2  3
-  //  4  5  6  7
-  //  8  9  10 11
-  //  12 13 14 15
-  bool _moveRowOrColumn(int start, int end, int step) {
+  bool _moveTilesBasedOnSwipe(double? xMovement, double? yMovement,
+      {bool isMovementPossibleTest = true}) {
+    List<bool> moves = [];
+    if (xMovement != null) {
+      // Swiping horizontally
+      if (xMovement > 0) {
+        // Swiping right
+        for (int i = 0; i < tCnt; i += rows) {
+          moves
+              .add(_moveRowOrColumn(i, i + (rows - 1), isMovementPossibleTest));
+        }
+      } else {
+        // Swiping left
+        for (int i = 0; i < tCnt; i += rows) {
+          moves
+              .add(_moveRowOrColumn(i + (rows - 1), i, isMovementPossibleTest));
+        }
+      }
+    }
+    if (yMovement != null) {
+      // Swiping vertically
+      if (yMovement > 0) {
+        // Swiping up
+        for (int i = 0; i < rows; i += 1) {
+          moves.add(_moveRowOrColumn(
+              i, i + (rows - 1) * rows, isMovementPossibleTest));
+        }
+      } else {
+        // Swiping down
+        for (int i = 0; i < rows; i += 1) {
+          moves.add(_moveRowOrColumn(
+              i + (rows - 1) * rows, i, isMovementPossibleTest));
+        }
+      }
+    }
+    return moves.contains(true);
+  }
+
+  /// Moves the tiles in a row or a column in a direction specified by [start]
+  /// and [end].
+  ///
+  /// The board of the game if set to 4 by 4:
+  /// 0  1  2  3
+  /// 4  5  6  7
+  /// 8  9  10 11
+  /// 12 13 14 15
+  /// With [start] and [end] a row or column is specified with a swiping
+  /// direction. I.e. start=15 and end=3 will move the tiles in the last column
+  /// upwards.
+  ///
+  /// [canMerge] can be turned to false. This is used to test if the game is
+  /// over. When the board is full, only a merge is possible. By disabling the
+  /// merging this works as a check if the player can still do a move or not.
+  ///
+  /// Returns true if a tile was moved.
+  bool _moveRowOrColumn(int start, int end, bool canMerge) {
+    int step = (end - start) ~/ (rows - 1);
     bool didCombine = false;
     bool didMove = false;
     // For loops have != as condition, this way both directions can be checked,
@@ -198,7 +252,9 @@ class _BoardManagerState extends State<BoardManager> {
       for (int i = step; i + curTile != end + step; i += step) {
         if (!_isGridPositionEmpty(curTile + i)) {
           if (_areTileNumbersEqual(curTile, curTile + i) && !didCombine) {
-            _mergeTiles(curTile, curTile + i);
+            if (canMerge) {
+              _mergeTiles(curTile, curTile + i);
+            }
             didCombine = true;
             didMove = true;
           } else {
@@ -218,40 +274,41 @@ class _BoardManagerState extends State<BoardManager> {
     return didMove;
   }
 
-  void _createTile() {
+  Future<void> _createTile() async {
     setState(() {
       var key = GlobalKey<TileState>();
       int gridNumber = _getRandomEmptyTile();
-      if (gridNumber == -1) {
-        AlertDialog alert = const AlertDialog(
-          title: Text("Game over"),
-          content: Text("You lost :("),
-        );
-
-        // show the dialog
-        showDialog(
-          context: context,
-          builder: (BuildContext context) {
-            return alert;
-          },
-        );
-      } else {
-        var xyPos = _calculateBoardPositionFromGridNumber(gridNumber);
-        //Todo switch back to random
-        int tileNumber = 2;
-        // int tileNumber = 2 + Random().nextInt(2) * 2;
-        widget.tiles.add(Tile(
-          key: key,
-          globalKey: key,
-          xPos: xyPos[0],
-          yPos: xyPos[1],
-          number: tileNumber,
-          tileSize: widget.tileSize,
-        ));
-        widget.boardState[gridNumber] = key;
-        print("added Tile, tilesize: ${widget.tileSize}");
-      }
+      var xyPos = _calculateBoardPositionFromGridNumber(gridNumber);
+      int tileNumber = 2 + Random().nextInt(2) * 2;
+      widget.tiles.add(Tile(
+        key: key,
+        globalKey: key,
+        xPos: xyPos[0],
+        yPos: xyPos[1],
+        number: tileNumber,
+        tileSize: widget.tileSize,
+      ));
+      widget.boardState[gridNumber] = key;
+      print("added Tile at pos $gridNumber, tilesize: ${widget.tileSize}");
     });
+    int gridNumber = _getRandomEmptyTile();
+    if (gridNumber == -1) {
+      if (!_isMovePossible()) {
+        await Future.delayed(Duration(milliseconds: 2000), () {
+          _createTile();
+          AlertDialog alert = const AlertDialog(
+            title: Text("Game over."),
+            content: Text("You lost."),
+          );
+          showDialog(
+            context: context,
+            builder: (BuildContext context) {
+              return alert;
+            },
+          );
+        });
+      }
+    }
   }
 
   void _moveTile(int curGridNumber, int newGridNumber) {
@@ -276,6 +333,7 @@ class _BoardManagerState extends State<BoardManager> {
   Future<void> _mergeTiles(int movingTile, int newGridNumber) async {
     GlobalKey<TileState>? tileToDeleteKey = widget.boardState[newGridNumber];
     _moveTile(movingTile, newGridNumber);
+
     // Wait a bit less than the sliding animation to upgrade the tile
     await Future.delayed(
         Duration(milliseconds: (widget.slideAniDur * 0.65).toInt()));
@@ -283,9 +341,10 @@ class _BoardManagerState extends State<BoardManager> {
     widget.boardState[newGridNumber]?.currentState?.upgradeTile();
   }
 
+  // Returns x and y position for an integer
   List<double> _calculateBoardPositionFromGridNumber(int gridNumber) {
-    var xTileIdx = gridNumber % 4;
-    var yTileIdx = gridNumber ~/ 4;
+    var xTileIdx = gridNumber % rows;
+    var yTileIdx = gridNumber ~/ rows;
     double xPos =
         widget.padding + (widget.tileSize + widget.padding) * xTileIdx;
     double yPos =
@@ -304,6 +363,13 @@ class _BoardManagerState extends State<BoardManager> {
       return -1;
     }
     return list[Random().nextInt(list.length)];
+  }
+
+  bool _isMovePossible() {
+    return (_moveTilesBasedOnSwipe(_swipeSensitivity, _swipeSensitivity,
+            isMovementPossibleTest: false) ||
+        _moveTilesBasedOnSwipe(-_swipeSensitivity, -_swipeSensitivity,
+            isMovementPossibleTest: false));
   }
 
   bool _areTileNumbersEqual(int gridNumber1, int gridNumber2) {
