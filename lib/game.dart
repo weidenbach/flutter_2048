@@ -118,11 +118,11 @@ class BoardManager extends StatefulWidget {
   final double margin;
   final int slideAniDur = 125;
   bool didStart = false;
+  bool didWin = false;
 
   List<Tile> tiles = [];
   // Contains keys of the tiles inside the tiles list.
-  List<GlobalKey<TileState>?> boardState =
-      List.filled(tCnt, null, growable: false);
+  List<GlobalKey<TileState>?> boardState = List.filled(tCnt, null);
 
   @override
   _BoardManagerState createState() => _BoardManagerState();
@@ -183,21 +183,21 @@ class _BoardManagerState extends State<BoardManager> {
   }
 
   bool _moveTilesBasedOnSwipe(double? xMovement, double? yMovement,
-      {bool isMovementPossibleTest = true}) {
+      {bool isMovementPossibleTest = false}) {
     List<bool> moves = [];
     if (xMovement != null) {
       // Swiping horizontally
       if (xMovement > 0) {
         // Swiping right
         for (int i = 0; i < tCnt; i += rows) {
-          moves
-              .add(_moveRowOrColumn(i, i + (rows - 1), isMovementPossibleTest));
+          moves.add(
+              _moveRowOrColumn(i, i + (rows - 1), !isMovementPossibleTest));
         }
       } else {
         // Swiping left
         for (int i = 0; i < tCnt; i += rows) {
-          moves
-              .add(_moveRowOrColumn(i + (rows - 1), i, isMovementPossibleTest));
+          moves.add(
+              _moveRowOrColumn(i + (rows - 1), i, !isMovementPossibleTest));
         }
       }
     }
@@ -207,13 +207,13 @@ class _BoardManagerState extends State<BoardManager> {
         // Swiping up
         for (int i = 0; i < rows; i += 1) {
           moves.add(_moveRowOrColumn(
-              i, i + (rows - 1) * rows, isMovementPossibleTest));
+              i, i + (rows - 1) * rows, !isMovementPossibleTest));
         }
       } else {
         // Swiping down
         for (int i = 0; i < rows; i += 1) {
           moves.add(_moveRowOrColumn(
-              i + (rows - 1) * rows, i, isMovementPossibleTest));
+              i + (rows - 1) * rows, i, !isMovementPossibleTest));
         }
       }
     }
@@ -274,7 +274,7 @@ class _BoardManagerState extends State<BoardManager> {
     return didMove;
   }
 
-  Future<void> _createTile() async {
+  void _createTile() {
     setState(() {
       var key = GlobalKey<TileState>();
       int gridNumber = _getRandomEmptyTile();
@@ -291,24 +291,32 @@ class _BoardManagerState extends State<BoardManager> {
       widget.boardState[gridNumber] = key;
       print("added Tile at pos $gridNumber, tilesize: ${widget.tileSize}");
     });
-    int gridNumber = _getRandomEmptyTile();
-    if (gridNumber == -1) {
+    if (_getRandomEmptyTile() == -1) {
       if (!_isMovePossible()) {
-        await Future.delayed(Duration(milliseconds: 2000), () {
-          _createTile();
+        Future.delayed(Duration(milliseconds: 2000), () async {
           AlertDialog alert = const AlertDialog(
             title: Text("Game over."),
-            content: Text("You lost."),
+            content: Text(
+                "You lost. Click outside of this box to restart the game."),
           );
-          showDialog(
+          await showDialog(
             context: context,
             builder: (BuildContext context) {
               return alert;
             },
           );
+          _restartGame();
         });
       }
     }
+  }
+
+  void _restartGame() {
+    setState(() {
+      widget.tiles.clear();
+      widget.boardState = List.filled(tCnt, null);
+      widget.didStart = false;
+    });
   }
 
   void _moveTile(int curGridNumber, int newGridNumber) {
@@ -338,7 +346,26 @@ class _BoardManagerState extends State<BoardManager> {
     await Future.delayed(
         Duration(milliseconds: (widget.slideAniDur * 0.65).toInt()));
     _deleteTile(tileToDeleteKey);
-    widget.boardState[newGridNumber]?.currentState?.upgradeTile();
+    int? newTileNumber =
+        widget.boardState[newGridNumber]?.currentState?.upgradeTile();
+    if (newTileNumber == 2048) {
+      await Future.delayed(Duration(milliseconds: 500), () {
+        if (!widget.didWin) {
+          widget.didWin = true;
+          AlertDialog alert = const AlertDialog(
+            title: Text("Congratulations"),
+            content:
+                Text("You won! Tap outside of this box to continue playing..."),
+          );
+          showDialog(
+            context: context,
+            builder: (BuildContext context) {
+              return alert;
+            },
+          );
+        }
+      });
+    }
   }
 
   // Returns x and y position for an integer
@@ -366,15 +393,23 @@ class _BoardManagerState extends State<BoardManager> {
   }
 
   bool _isMovePossible() {
-    return (_moveTilesBasedOnSwipe(_swipeSensitivity, _swipeSensitivity,
-            isMovementPossibleTest: false) ||
-        _moveTilesBasedOnSwipe(-_swipeSensitivity, -_swipeSensitivity,
-            isMovementPossibleTest: false));
+    return (_moveTilesBasedOnSwipe(_swipeSensitivity, null,
+            isMovementPossibleTest: true) ||
+        _moveTilesBasedOnSwipe(null, _swipeSensitivity,
+            isMovementPossibleTest: true));
   }
 
   bool _areTileNumbersEqual(int gridNumber1, int gridNumber2) {
-    return widget.boardState[gridNumber1]?.currentState?.widget.number ==
-        widget.boardState[gridNumber2]?.currentState?.widget.number;
+    var tile1, tile2;
+    for (var tile in widget.tiles) {
+      if (tile.globalKey == widget.boardState[gridNumber1]) {
+        tile1 = tile;
+      }
+      if (tile.globalKey == widget.boardState[gridNumber2]) {
+        tile2 = tile;
+      }
+    }
+    return tile1.number == tile2.number;
   }
 
   bool _isGridPositionEmpty(int gridNumber) {

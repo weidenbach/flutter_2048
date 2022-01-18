@@ -119,7 +119,8 @@ class TileState extends State<Tile> with TickerProviderStateMixin {
     );
   }
 
-  void upgradeTile() {
+  /// Returns the new tile number.
+  int upgradeTile() {
     setState(() {
       widget.number *= 2;
       widget.backgroundColor = widget.tileBackgroundColorMap[widget.number];
@@ -143,6 +144,7 @@ class TileState extends State<Tile> with TickerProviderStateMixin {
         }
       });
     });
+    return widget.number;
   }
 
   Future<void> animateToPosition(double newXPos, double newYPos) async {
