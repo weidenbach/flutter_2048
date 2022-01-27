@@ -8,17 +8,16 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations(
     [DeviceOrientation.portraitUp],
-  ); // Turns off landscape mode
+  ); // Disables landscape mode
   runApp(const App2048());
 }
 
-const int rows = 4;
-const int tCnt = rows * rows; //Tiles count
+const int rows = 4; // and columns
+const int tCnt = rows * rows; // Tiles count
 
 class App2048 extends StatelessWidget {
   const App2048({Key? key}) : super(key: key);
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -31,6 +30,7 @@ class App2048 extends StatelessWidget {
   }
 }
 
+/// The grey background tiles / grid of the game, which is only drawn once.
 class Board extends StatelessWidget {
   Board({Key? key, required this.title}) : super(key: key);
   final String title;
@@ -103,6 +103,7 @@ class Board extends StatelessWidget {
   }
 }
 
+/// Handles the drawing, movement and merging of the game tiles.
 class BoardManager extends StatefulWidget {
   BoardManager(
       {Key? key,
@@ -129,7 +130,7 @@ class BoardManager extends StatefulWidget {
 }
 
 class _BoardManagerState extends State<BoardManager> {
-  final double _swipeSensitivity = 5;
+  final double _swipeSensitivity = 5; // A higher value requires longer swipes.
   bool _isAnimationOngoing = false;
 
   @override
@@ -172,7 +173,7 @@ class _BoardManagerState extends State<BoardManager> {
     if (!_isAnimationOngoing) {
       _isAnimationOngoing = true;
       bool didMove = _moveTilesBasedOnSwipe(xMovement, yMovement);
-      // Only create tile if a tile moved
+      // Only create a tile if a tile moved
       if (didMove) {
         await Future.delayed(Duration(milliseconds: widget.slideAniDur), () {
           _createTile();
@@ -368,7 +369,7 @@ class _BoardManagerState extends State<BoardManager> {
     }
   }
 
-  // Returns x and y position for an integer
+  /// Returns x and y coordinates on the board for a given [gridNumber]
   List<double> _calculateBoardPositionFromGridNumber(int gridNumber) {
     var xTileIdx = gridNumber % rows;
     var yTileIdx = gridNumber ~/ rows;

@@ -69,7 +69,7 @@ class TileState extends State<Tile> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    // scaleAnimation for spawning animation and for upgrading animation.
+    // scaleAnimation is used for spawning and upgrading animation.
     var scaleAnimation = ScaleTransition(
       //
       scale: Tween(begin: _scaleAnimationStart, end: _scaleAnimationEnd)
